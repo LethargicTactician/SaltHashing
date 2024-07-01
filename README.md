@@ -19,11 +19,10 @@
 9. You must enforce some type of basic password complexity rules for your user's chosen passwords. For instance, your passwords might need to require a certain number of letters, numbers, characters, special symbols, non-repeating characters, etc... (While you can certainly write your own algo for this, feel free to leverage a library from your platform of choice.
 
 Be sure to show:
--> a user registering 
--> credentials stored in the table
--> a user authenticating incorrectly
--> a user authenticating correctly
--> a user changing their password
--> password protection rules
--> a brief tour of your code
+1. > a user registering 
+2. > credentials stored in the table
+3. > a user authenticating incorrectly
+4. > a user authenticating correctly
+5. > a user changing their password
+6. > password protection rules
 
