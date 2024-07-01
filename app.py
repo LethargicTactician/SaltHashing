@@ -1,4 +1,5 @@
 import json
+import re
 import sqlite3
 import hashlib
 from flask import Flask, jsonify, request, g
@@ -35,6 +36,19 @@ def create_table():
 with app.app_context():
     create_table()
 
+def check_password_complexity(password):
+    if len(password) < 6:
+        return "Weak password: at least 6 chars long"
+    
+    if not (re.search (r'[A-Z]', password) and
+            re.search (r'[a-z]', password) and
+            re.search (r'\d', password)):
+        return "Weak password: must have uppercase and lower case letters + numbers"
+        
+    if not re.search (r'[!@#$%^&*()_+{}|:"<>?]', password):
+        return "Mid... I demand more special characters!"
+    
+    return "Strong: your password is good enough, congrats"
 
  #ROUTES
 @app.route('/', methods=['GET'])
@@ -49,6 +63,12 @@ def create_user():
         name = user_data.get('name')
         email = user_data.get('email')
         password = user_data.get('password')
+
+    # password complexity thing
+        password_requiremnts = check_password_complexity(password)
+        if not password_requiremnts.startswith("Strong"):
+            return jsonify({'message': password_requiremnts}), 400
+    
     # Parse user json information
         db = get_db()
         cursor = db.cursor()
@@ -119,6 +139,13 @@ def update_user():
         email = user_data.get('email')
         password = user_data.get('password')
         new_pass = user_data.get('new_pass')
+
+
+        # password complexity thing
+        password_requiremnts = check_password_complexity(new_pass)
+        if not password_requiremnts.startswith("Strong"):
+            return jsonify({'message': password_requiremnts}), 400
+        
 
         db = get_db()
         cursor = db.cursor()
