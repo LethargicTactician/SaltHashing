@@ -23,7 +23,7 @@ def create_table():
         cursor.execute(
             '''CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY,
-            salted_key NOT NULL,
+            salt NOT NULL,
             name text NOT NULL,
             email text NOT NULL,
             password text NOT NULL        
@@ -52,9 +52,10 @@ def check_password_complexity(password):
     return "Strong: your password is good enough, congrats"
 
 #Salting
-def randomword(length):
-   letters = string.ascii_lowercase
-   return ''.join(random.choice(letters) for i in range(length))
+def generate_salt(length=16):
+    characters = string.ascii_letters + string.digits + string.punctuation
+    return ''.join(random.choice(characters) for i in range(length))
+
 
  #ROUTES
 @app.route('/', methods=['GET'])
@@ -63,90 +64,84 @@ def default_route():
 
 @app.route('/register', methods=['POST'])
 def create_user():
-    # Get the user json information
     try:
         user_data = request.json
         name = user_data.get('name')
         email = user_data.get('email')
-        salt_key = user_data.get('salted_key')
         password = user_data.get('password')
-        real_pw = password+salt_key
 
-    # password complexity thing
-        password_requiremnts = check_password_complexity(password)
-        if not password_requiremnts.startswith("Strong"):
-            return jsonify({'message': password_requiremnts}), 400
-    
-    # Parse user json information
+        # Password complexity check
+        password_requirements = check_password_complexity(password)
+        if not password_requirements.startswith("Strong"):
+            return jsonify({'message': password_requirements}), 400
+
         db = get_db()
         cursor = db.cursor()
 
-    # check if email exists
+        # Check if email exists
         cursor.execute("SELECT * FROM users WHERE email = ?", (email,))
         existing_user = cursor.fetchone()
 
-        if existing_user: 
-            return jsonify({"message": "Email already exixts"}), 400
-        
-        #add salt to the pw entered and store as salt
+        if existing_user:
+            return jsonify({"message": "Email already exists"}), 400
 
+        salt = generate_salt()
 
-    # hash password - sha256
+        # Concatenate salt and password, then hash
+        salted_password = password + salt
+        hashed_password = hashlib.sha256(salted_password.encode()).hexdigest()
 
-        hashed_password = hashlib.sha256(real_pw.encode()).hexdigest()
-
-    #naew user instance cus we aint callin it lol     
-    # store in db
+        # Store
         cursor.execute(
-            "INSERT INTO users (name, email, salt, password) VALUES (?, ?, ?)",
-            (name, email, hashed_password)
+            "INSERT INTO users (name, email, salt, password) VALUES (?, ?, ?, ?)",
+            (name, email, salt, hashed_password)
         )
         db.commit()
-    # return 201 response saying created
-        return jsonify({"message": "a person was born!"}), 201
+
+        return jsonify({"message": "User registered successfully!"}), 201
+
     except sqlite3.Error as e:
         return jsonify({"error": f"Database error: {str(e)}"}), 500
     except Exception as e:
         return jsonify({"error": f"Internal server error: {str(e)}"}), 500
 
+
 @app.route('/login', methods=['POST', 'GET'])
 def login_user():
-    # get the user json info
-    # parse the son info
-    # check if email exists
-    # check if password is correct
-    # set the user instance to that
     try:
         user_data = request.json
         email = user_data.get('email')
-        salt_key = user_data.get('salted_key')
         password = user_data.get('password')
-        
 
         db = get_db()
         cursor = db.cursor()
 
-        cursor.execute("SELECT * FROM users WHERE email = ?", (email,))
-        
-        #when you login you get the salt strored in the dbt and 
-        #join that with the JSON that the person entered in the pw and then you compare both hashes
+        # Retrieve the user's salt and hashed password from the database
+        cursor.execute("SELECT salt, password FROM users WHERE email = ?", (email,))
+        user_record = cursor.fetchone()
 
+        if user_record is None:
+            return jsonify({"message": "User not found"}), 400
 
+        salt, stored_hashed_password = user_record
 
-        #password thing compare thing
-        hash_password = hashlib.sha256(password.encode()).hexdigest()
-        cursor.execute("SELECT * FROM users WHERE email = ? AND password = ?", (email, hash_password))
+        # Concatenate the salt with the provided password
+        salted_password = password + salt
 
-        intruder = cursor.fetchone()
+        # Hash the concatenated result
+        hashed_password = hashlib.sha256(salted_password.encode()).hexdigest()
 
-        if intruder is None:
-            return jsonify({"message": "NUH UH THIS AINT U"}), 400
+        # Compare the hashed password with the stored hashed password
+        if hashed_password != stored_hashed_password:
+            return jsonify({"message": "Invalid email or password"}), 400
 
-        return jsonify ({"message": "Logged innn!"}), 200
+        return jsonify({"message": "Logged in successfully!"}), 200
+
     except sqlite3.Error as e:
         return jsonify({"error": f"Database error: {str(e)}"}), 500
     except Exception as e:
         return jsonify({"error": f"Internal server error: {str(e)}"}), 500
+
 
 
 #UPDAE HERE
@@ -155,36 +150,59 @@ def update_user():
     try:
         user_data = request.json
         email = user_data.get('email')
-        password = user_data.get('password')
-        new_pass = user_data.get('new_pass')
+        current_password = user_data.get('password')
+        new_password = user_data.get('new_pass')
 
-
-        # password complexity thing
-        password_requiremnts = check_password_complexity(new_pass)
-        if not password_requiremnts.startswith("Strong"):
-            return jsonify({'message': password_requiremnts}), 400
-        
+        # Password complexity check
+        password_requirements = check_password_complexity(new_password)
+        if not password_requirements.startswith("Strong"):
+            return jsonify({'message': password_requirements}), 400
 
         db = get_db()
         cursor = db.cursor()
 
-        hash_password = hashlib.sha256(password.encode()).hexdigest()
+        # Retrieve the user's salt and hashed password from the database
+        cursor.execute("SELECT salt, password FROM users WHERE email = ?", (email,))
+        user_record = cursor.fetchone()
 
-        cursor.execute("SELECT * FROM users WHERE email = ? AND password = ?", (email, hash_password))
-        email_verification = cursor.fetchone()
-        if email_verification is None:
-            return jsonify ({"message": "email doesnt exist lol"}), 400      
+        if user_record is None:
+            return jsonify({"message": "User not found"}), 400
 
-        hash_new_pass = hashlib.sha256(new_pass.encode()).hexdigest()
-        cursor.execute("UPDATE users SET password = ? WHERE email = ?", (hash_new_pass, email)) 
+        salt, stored_hashed_password = user_record
+
+        # Concatenate the salt with the provided current password
+        salted_current_password = current_password + salt
+
+        # Hash the concatenated result
+        hashed_current_password = hashlib.sha256(salted_current_password.encode()).hexdigest()
+
+        # Verify the current password
+        if hashed_current_password != stored_hashed_password:
+            return jsonify({"message": "Incorrect current password"}), 400
+
+        # Generate a new salt for the new password
+        new_salt = generate_salt()
+
+        # Concatenate the new salt with the new password
+        salted_new_password = new_password + new_salt
+
+        # Hash the concatenated result
+        hashed_new_password = hashlib.sha256(salted_new_password.encode()).hexdigest()
+
+        # Update the user's password and salt in the database
+        cursor.execute(
+            "UPDATE users SET salt = ?, password = ? WHERE email = ?",
+            (new_salt, hashed_new_password, email)
+        )
         db.commit()
-        
 
-        return jsonify({"message": "User updated"}), 200
+        return jsonify({"message": "Password updated successfully!"}), 200
+
     except sqlite3.Error as e:
         return jsonify({"error": f"Database error: {str(e)}"}), 500
     except Exception as e:
         return jsonify({"error": f"Internal server error: {str(e)}"}), 500
+
 
 
 
