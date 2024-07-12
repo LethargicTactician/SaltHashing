@@ -45,10 +45,9 @@ def check_password_complexity(password):
             re.search (r'[a-z]', password) and
             re.search (r'\d', password)):
         return "Weak password: must have uppercase and lower case letters + numbers"
-        
+            
     if not re.search (r'[!@#$%^&*()_+{}|:"<>?]', password):
-        return "Mid... I demand more special characters!"
-    
+        return "Mid... I demand more special characters!"    
     return "Strong: your password is good enough, congrats"
 
 #Salting
@@ -116,7 +115,6 @@ def login_user():
         db = get_db()
         cursor = db.cursor()
 
-        # Retrieve the user's salt and hashed password from the database
         cursor.execute("SELECT salt, password FROM users WHERE email = ?", (email,))
         user_record = cursor.fetchone()
 
@@ -124,14 +122,11 @@ def login_user():
             return jsonify({"message": "User not found"}), 400
 
         salt, stored_hashed_password = user_record
-
-        # Concatenate the salt with the provided password
         salted_password = password + salt
-
-        # Hash the concatenated result
+        # Hashy washy
         hashed_password = hashlib.sha256(salted_password.encode()).hexdigest()
 
-        # Compare the hashed password with the stored hashed password
+        # Hashy the washy? washy the hashy :)
         if hashed_password != stored_hashed_password:
             return jsonify({"message": "Invalid email or password"}), 400
 
@@ -161,7 +156,6 @@ def update_user():
         db = get_db()
         cursor = db.cursor()
 
-        # Retrieve the user's salt and hashed password from the database
         cursor.execute("SELECT salt, password FROM users WHERE email = ?", (email,))
         user_record = cursor.fetchone()
 
@@ -169,27 +163,18 @@ def update_user():
             return jsonify({"message": "User not found"}), 400
 
         salt, stored_hashed_password = user_record
-
-        # Concatenate the salt with the provided current password
         salted_current_password = current_password + salt
-
-        # Hash the concatenated result
         hashed_current_password = hashlib.sha256(salted_current_password.encode()).hexdigest()
 
-        # Verify the current password
+        # VERIFY!!
         if hashed_current_password != stored_hashed_password:
             return jsonify({"message": "Incorrect current password"}), 400
 
-        # Generate a new salt for the new password
+        # Generate a new salt
         new_salt = generate_salt()
-
-        # Concatenate the new salt with the new password
         salted_new_password = new_password + new_salt
-
-        # Hash the concatenated result
         hashed_new_password = hashlib.sha256(salted_new_password.encode()).hexdigest()
 
-        # Update the user's password and salt in the database
         cursor.execute(
             "UPDATE users SET salt = ?, password = ? WHERE email = ?",
             (new_salt, hashed_new_password, email)
@@ -202,8 +187,6 @@ def update_user():
         return jsonify({"error": f"Database error: {str(e)}"}), 500
     except Exception as e:
         return jsonify({"error": f"Internal server error: {str(e)}"}), 500
-
-
 
 
 if __name__ == '__main__':
