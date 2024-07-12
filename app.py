@@ -2,6 +2,7 @@ import json
 import re
 import sqlite3
 import hashlib
+import random, string
 from flask import Flask, jsonify, request, g
 
 app = Flask(__name__)
@@ -16,13 +17,13 @@ def get_db():
 
 # Creating dbt tables
 def create_table():
-    #connect frfr on skibidi
     try:
-        db = get_db() #method above
-        cursor = db.cursor() # get the database cursor / writer
+        db = get_db()
+        cursor = db.cursor()
         cursor.execute(
             '''CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY,
+            salted_key NOT NULL,
             name text NOT NULL,
             email text NOT NULL,
             password text NOT NULL        
@@ -32,10 +33,10 @@ def create_table():
     except Exception as e:
         return "Dbt exists like- it do be there"
     
-# Initialize the database table
 with app.app_context():
     create_table()
 
+#PW complexity stuff
 def check_password_complexity(password):
     if len(password) < 6:
         return "Weak password: at least 6 chars long"
@@ -50,6 +51,11 @@ def check_password_complexity(password):
     
     return "Strong: your password is good enough, congrats"
 
+#Salting
+def randomword(length):
+   letters = string.ascii_lowercase
+   return ''.join(random.choice(letters) for i in range(length))
+
  #ROUTES
 @app.route('/', methods=['GET'])
 def default_route():
@@ -62,7 +68,9 @@ def create_user():
         user_data = request.json
         name = user_data.get('name')
         email = user_data.get('email')
+        salt_key = user_data.get('salted_key')
         password = user_data.get('password')
+        real_pw = password+salt_key
 
     # password complexity thing
         password_requiremnts = check_password_complexity(password)
@@ -79,18 +87,21 @@ def create_user():
 
         if existing_user: 
             return jsonify({"message": "Email already exixts"}), 400
+        
+        #add salt to the pw entered and store as salt
+
 
     # hash password - sha256
 
-        hashed_password = hashlib.sha256(password.encode()).hexdigest()
+        hashed_password = hashlib.sha256(real_pw.encode()).hexdigest()
 
     #naew user instance cus we aint callin it lol     
     # store in db
         cursor.execute(
-            "INSERT INTO users (name, email, password) VALUES (?, ?, ?)",
+            "INSERT INTO users (name, email, salt, password) VALUES (?, ?, ?)",
             (name, email, hashed_password)
         )
-        db.commit()   
+        db.commit()
     # return 201 response saying created
         return jsonify({"message": "a person was born!"}), 201
     except sqlite3.Error as e:
@@ -108,13 +119,20 @@ def login_user():
     try:
         user_data = request.json
         email = user_data.get('email')
+        salt_key = user_data.get('salted_key')
         password = user_data.get('password')
+        
 
         db = get_db()
         cursor = db.cursor()
 
         cursor.execute("SELECT * FROM users WHERE email = ?", (email,))
         
+        #when you login you get the salt strored in the dbt and 
+        #join that with the JSON that the person entered in the pw and then you compare both hashes
+
+
+
         #password thing compare thing
         hash_password = hashlib.sha256(password.encode()).hexdigest()
         cursor.execute("SELECT * FROM users WHERE email = ? AND password = ?", (email, hash_password))
